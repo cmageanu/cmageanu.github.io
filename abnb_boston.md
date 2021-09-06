@@ -75,14 +75,74 @@ Well, yes we can and we do not need much data processing for this. The following
 
 ![Corr_heatmap](corr_heatmap.png)
 
+Perhaps unsurprisingly, the following features show a significant degree of correlation: accomodates, bathrooms, bedrooms, beds, guests_included. They all describe in one way or another the capacity of the listing to accomodate people - so some degree of correlation is expected.
+
+Another cluster of correlated features is the availability_30/60/90/365. Success is always unequally distributed, and the availability measures perhaps the (lack of) success of the listings. Popular listings will tend to be fully booked for most of the time while unpopular hosts will list availability for most of the foreseable periods: 30/60/90/365 days in the future - hence the significant correlation of these features. 
+
+The availability features also show correlation with calculated_host_listings_count and host_total_listings_count, again, somewhat expected: the more listings there are per host, the more likely some of them will be available.
+
+Finally there is a correlated cluster of features describing reviews - 7 of them. That means people tend to provide consistent reviews - be them on the positive or negative side.
+
 ### Can we predict prices better than the simple average value of $174?
+
+Yes, we can with minimal effort. Here are the scores of mean_absolute_error metric for a few regression algorithms:
+
+|Type of regressor | mean_absolute_error|
+|--|:--:|
+Simple mean|88.58
+Linear|61.07
+Random Forest| 52.69
+XGBoost with minimal tuning| 52.39
+
+As mentioned before, with no tuning at all, XGBoost performs worse than Random Forest, producing a mean_bsolute error of 56.43. You can see the details in the [code](https://github.com/cmageanu/abnb_boston).
+
 ### What are the most important features determining the price of a listing?
 
+Both Random Forest and XGBoost models produce feature importance data sets, revealing the importance of the features in the model produced. Let's have a look at the top 10 features:
 
+#### Random Forest
+
+|Feature|Weight|
+|:-|-:|
+|x7_Entire home/apt|	2.337478e-01
+|longitude	|1.685984e-01
+|bathrooms	|1.195159e-01
+|latitude	|7.500666e-02
+|availability_365|	3.293117e-02
+|availability_90	|2.701877e-02
+|bedrooms	|2.590484e-02
+|availability_60|	2.575944e-02
+|availability_30|	2.459939e-02
+|minimum_nights	|2.425289e-02
+
+#### XGBoost
+
+|Feature|Weight|
+|:-|-:|
+|x7_Entire home/apt	|0.411931
+|bathrooms|	0.092844|
+|bedrooms	|0.062154|
+|x3_f	|0.049112|
+|x10_super_strict_30|	0.033150|
+|longitude	|0.029080|
+|availability_30|	0.026993|
+|accommodates	|0.019304|
+|x12_f	|0.015631|
+|availability_60|	0.015571|
+
+Top spot on both algorithms is "x7_Entire home/apt" which is a categorical value present in the initial field room_type. So, whether you share the property or not with someone else has the most impact on the price. Perhaps people prefer not to share the property during their stay thus driving up prices for this type of listing.
+
+Bathrooms and bedrooms also have a big impact on the price as well as the availability. Again, not surprising, the bigger the house the bigger the number of bathrooms and bedrooms which drives the price up.
+
+On the location, both alghoritms give a high rank to the longitude. Latitude is also important but less so, ranking 4th on Random Forest and not event making the top 10 for XGBoost (but close - it takes the 11th spot). Location matters but it seems the Est-West position is more important than the North-South one - this may mean something to people familiar with the Boston area.
+
+## Conclusion:
+
+In this article, we had a brief look at the Airbnb listings for the Boston area, following the CRISP-DM steps. We tried to predict the price of the listings while making fast common decisions in regards to missing values and encoding categorical values. The predictions for the price seem reassuring and features make business sense when looked at from a correlation or a model perspective.
 
 Over to you now:
 
-1. Can you improve the predictions further using a more elaborate Grid search method as hinted here?
-2. There is a reviews.csv data set included. Can you employ a sentiment analysis on the reviews and use it as an additional feature to see if this can improve the prediction model?
-3. Can you try a deep learning approach as described here (fastbook link) and see whether this brings an improvement of the predictions?
-
+1. Can you simplify the model(s) by making a trade-off between the numbers of features and the precision of the model(s)?
+2. Can you improve the predictions further using a more elaborate Grid search method ? Is it worth the effort?
+3. There is a reviews.csv data set included. Can you employ a sentiment analysis on the reviews and use it as an additional feature to see if this can improve the prediction model?
+4. There is a calendar.csv dataset as well. It would be interesting to study the variability of the prices from a seasonal perspective as well as around public US holidays and major periodic events taking place in Boston.
