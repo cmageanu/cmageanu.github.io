@@ -1,33 +1,5 @@
-```python
-import pandas_datareader as pdr
-import numpy as np
-import pandas as pd
-from datetime import datetime
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-from sklearn.model_selection import train_test_split
-
-from pandas import DataFrame
-from pandas import concat
-
-from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor
-from xgboost import XGBRegressor
-from sklearn.metrics import mean_absolute_error
-from sklearn.metrics import mean_absolute_percentage_error
-from sklearn.multioutput import MultiOutputRegressor
-
-import pickle
-from pathlib import Path
-
-import random
-import os
-
-from statistics import mean
-```
-
-# Content
+# Predicting Stock Prices
+## Content
 #### [Introduction](#introduction)
 #### [Executive Summary](#executive)
 #### [Time series prediction approached with tabular regression](#time_series)
