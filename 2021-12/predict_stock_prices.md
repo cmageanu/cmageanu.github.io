@@ -1,37 +1,14 @@
-# Predicting Stock Prices
-## Content
-#### [Introduction](#introduction)
-#### [Executive Summary](#executive)
-#### [Time series prediction approached with tabular regression](#time_series)
-#### [Dive in. Easy come easy go.](#dive_in)
-#### [One model or many models?](#one_model)
-#### [How much lagged data do we need?](#how_much_lagged)
-#### [How much data do we need?](#how_much_data)
-#### [Test (almost) all the data](#test_all)
-#### [Conclusion](#conclusion)
-#### [External links](#external_links)
-
-<a id='introduction'></a>
-
-## Introduction
+# Predicting Stock Prices - DSND Capstone project
 
 This work is part of a Data Science Nanodegree at [Udacity](#itcp). It is an attempt to implement a stock predictor.
 
-From the very beginning let's make clear this work has nothing to do with any investment objective. At no time there is any attempt to asses any profit following the predictive model described here. As such, it must be seen just an oportunity to exercise a few data science tools and methods.
+## Project Definition
 
-The proposed objective is to obtain an average relative percentage error of +/- 5% of the actual value for up to 7 days in the future. The predicted value is Adjusted Close.
+### Project Overview
 
-Predicting stock prices is notoriously hard not least because they are known to contain a lot of randomness. [Random Walks](#random_walks) and [Brownian motion](#brownian_motion) have been used to model stock prices - both are techniques modelling random events.
+From the very beginning let's make clear this work has nothing to do with any investment objective. At no time there is any attempt to asses any profit and loss function following the predictive model described here. As such, it must be seen just an oportunity to exercise a few data science tools and methods.
 
-Given the above, predicting stock prices seems to be a hard task.
-
-On the other hand, long term average stock market return seems to be fairly stable at around 10%, as reported [here](#asr_1) and [here](#asr_2) for example.
-
-A 10% growth averaged over about 250 trading days per year, gives us hope that, at least for stable stocks with relatively low volatility, predicting with +/- 5% precision for up to 7 days in the future is achievable. So let's see.
-
-<a id='executive'></a>
-
-## Executive Summary
+The overall objective of this project is to predict stock prices.
 
 We employ a supervised learning approach where the features of the predicted value, Adjusted Close stock price (AC), are the AC values of the the same stock for the previous days.
 
@@ -41,73 +18,35 @@ We test a Linear regressor with 20 lagged values and find out that it performs o
 
 For testing we looked at a subset of the Nasdaq stocks with a market valuation of $1bn or more. This subset contains about 34% of the Nasdaq stock symbols, but make over 98% of the total Market Capitalisation of Nasdaq listed companies as of this date (December 2021). From this perspective we tested the predictor practically over the whole market.
 
-<a id='time_series'></a>
+### Problem Statement
 
-## Time series prediction approached with tabular regression
+The project's objective is to build a stock price predictor that takes daily trading data over a certain date range as input, and outputs projected estimates for given query dates.
 
-### Source of Data
+Various metrics are available from market data suppliers. The predicted value needs to be the Adjusted Close (AC) field.
+
+The proposed objective is to obtain an average relative percentage error of +/- 5% of the actual value AC for up to 7 days in the future.
+
+Predicting stock prices is notoriously hard not least because they are known to contain a lot of randomness. [Random Walks](#random_walks) and [Brownian motion](#brownian_motion) have been used to model stock prices - both are techniques modelling random events.
+
+Given the above, predicting stock prices seems to be a hard task.
+
+On the other hand, long term average stock market return seems to be fairly stable at around 10%, as reported [here](#asr_1) and [here](#asr_2) for example.
+
+A 10% growth averaged over about 250 trading days per year, gives us hope that, at least for stable stocks with relatively low volatility, predicting with +/- 5% precision for up to 7 days in the future is achievable. So let's see.
+
+### Metrics
+
+The project specification states one possible criteria as: predicted stock value 7 days out is within +/- 5% of actual value, on average. So we will try to optimise the predictor against the mean absolute percentage error (MAPE). The MAPE of our predicted values 7 days out into the future should be less than 0.05.
+
+## Data Exploration and Visualisation
 
 We are using data from [Yahoo Finance](#yfinance) for which there is a python module, pandas_datareader which can extract data programatically for a given stock symbol.
 
+We'll look at stock prices as a series of metric values, mainly AC values as we'll see below. So all the data processing and prediction will revolve around the AC values as a time series.
+
 First, we'll define a function, get_symbol_data to retrieve the data from Yahoo Finance and store it on disk, if it has not been downloaded today.
 
-
-```python
-def get_yahoo_symbol_data(symbol):
-    """
-    Retrieves daily trading data from Yahoo Finance. Saves it as file data/symbol.csv, overwriting any existing data.
-    Arguments:
-        symbol: string, stock symbol i.e GOOG, TSLA
-        start_date: start date of the retrieved data set as a datetime object
-    Returns:
-        Pandas DataFrame with the following columns: High, Low, Open, Close, Volume, Adj Close
-        All available data for the respective symbol is retrieved, if any.
-    """    
-    try:
-        symbol_data = pdr.get_data_yahoo(symbols=symbol, start=datetime(1900, 1, 1))
-        # pickle data
-        pickle.dump(symbol_data, open('data/{0}.pickle'.format(symbol), 'wb'))
-    except:
-        print('error encountered on downloading symbol {0}; skipping it'.format(symbol))
-        symbol_data = None
-    
-    return symbol_data
-```
-
-
-```python
-def get_symbol_data(symbol, start_date='2000-01-01'):
-    """
-    Retrieves daily trading data from Yahoo Finance. Saves it as file data/symbol.csv.
-    If data/symbol.csv exists and was created today, then no downloading occurs.
-    Arguments:
-        symbol: string, stock symbol i.e GOOG, TSLA
-        start_date: start date of the retrieved data set, in format YYYY-MM-DD
-    Returns:
-        Pandas DataFrame with the following columns: High, Low, Open, Close, Volume, Adj Close
-        If the symbol data does not extend back in time to start_date, then all available data for the respective symbol is retrieved, if any.
-    """
-
-    today = datetime.now().date()
-    symbol_filename = 'data/{0}.pickle'.format(symbol)
-       
-    # if symbol_filename does not exist or is different from today, then download symbol data and save it as data/{symbol}.csv
-    if not Path(symbol_filename).is_file():
-        symbol_data = get_yahoo_symbol_data(symbol)
-    else:
-        symbol_filedate = datetime.fromtimestamp(os.path.getctime(symbol_filename)).date()
-        if not symbol_filedate == today:
-            symbol_data = get_yahoo_symbol_data(symbol)
-        else:
-            symbol_data = pickle.load(open(symbol_filename, 'rb'))
-    
-    if symbol_data is not None:
-        symbol_data = symbol_data.loc[start_date:]
-    
-    return symbol_data
-```
-
-Let's pick a symbol, say GOOG and prepare features for the Adjusted Close field as the previous values of the same time series of Adjusted Close values.
+Let's pick a symbol, say GOOG and and plot the the Adjusted Close field to try to make sense of the data:
 
 
 ```python
@@ -130,8 +69,12 @@ symbol_data['Adj Close'].plot(figsize=(16,9))
 
 
 
-![png](output_14_1.png)
+![png](output_9_1.png)
 
+
+Despite the apparent noise in the graph above, as we'll see, it turns out that GOOG is one of the more predictable stocks, for which the MAPE value of our predictor falls well under the 5% objective.
+
+A note to say about the Yahoo Finance data is that it is very well formed with no missing data, so we don't have to do any data pre-processing
 
 Plotting the autocorrelation matrix, suggests that only the Volume field may contain additional information. All other fields have a strong correlation with the Adjusted Close field and are likely to not improve a model that would include them as features.
 
@@ -143,13 +86,319 @@ sns.heatmap(symbol_data.corr(), annot=True, fmt=".2f");
 ```
 
 
-![png](output_16_0.png)
+![png](output_11_0.png)
 
 
-Let's rename columns for easier coding:
+Another data set we'll use is a list of stock symbols from the [Nasdaq website.](#nasdaq_stock_symbols) downloaded into a file called symbols.csv.
 
 
 ```python
+symbols_data = pd.read_csv('symbols.csv')
+symbols_data = symbols_data.sort_values(['Market Cap'], ascending=[False])
+symbols_data
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>Symbol</th>
+      <th>Name</th>
+      <th>Last Sale</th>
+      <th>Net Change</th>
+      <th>% Change</th>
+      <th>Market Cap</th>
+      <th>Country</th>
+      <th>IPO Year</th>
+      <th>Volume</th>
+      <th>Sector</th>
+      <th>Industry</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>18</th>
+      <td>AAPL</td>
+      <td>Apple Inc. Common Stock</td>
+      <td>$172.26</td>
+      <td>-7.04</td>
+      <td>-3.926%</td>
+      <td>2.986530e+12</td>
+      <td>United States</td>
+      <td>1980.0</td>
+      <td>149956379</td>
+      <td>Technology</td>
+      <td>Computer Manufacturing</td>
+    </tr>
+    <tr>
+      <th>5006</th>
+      <td>MSFT</td>
+      <td>Microsoft Corporation Common Stock</td>
+      <td>$324.90</td>
+      <td>-9.75</td>
+      <td>-2.913%</td>
+      <td>2.439343e+12</td>
+      <td>United States</td>
+      <td>1986.0</td>
+      <td>34986695</td>
+      <td>Technology</td>
+      <td>Computer Software: Prepackaged Software</td>
+    </tr>
+    <tr>
+      <th>3354</th>
+      <td>GOOG</td>
+      <td>Alphabet Inc. Class C Capital Stock</td>
+      <td>$2896.77</td>
+      <td>-50.60</td>
+      <td>-1.717%</td>
+      <td>1.922772e+12</td>
+      <td>United States</td>
+      <td>2004.0</td>
+      <td>1368942</td>
+      <td>Technology</td>
+      <td>Internet and Information Services</td>
+    </tr>
+    <tr>
+      <th>3355</th>
+      <td>GOOGL</td>
+      <td>Alphabet Inc. Class A Common Stock</td>
+      <td>$2888.90</td>
+      <td>-39.92</td>
+      <td>-1.363%</td>
+      <td>1.917548e+12</td>
+      <td>United States</td>
+      <td>NaN</td>
+      <td>1681623</td>
+      <td>Technology</td>
+      <td>Internet and Information Services</td>
+    </tr>
+    <tr>
+      <th>452</th>
+      <td>AMZN</td>
+      <td>Amazon.com Inc. Common Stock</td>
+      <td>$3377.42</td>
+      <td>-88.88</td>
+      <td>-2.564%</td>
+      <td>1.712851e+12</td>
+      <td>United States</td>
+      <td>1997.0</td>
+      <td>3038172</td>
+      <td>Consumer Services</td>
+      <td>Catalog/Specialty Distribution</td>
+    </tr>
+    <tr>
+      <th>...</th>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+    </tr>
+    <tr>
+      <th>8073</th>
+      <td>WRB^G</td>
+      <td>W.R. Berkley Corporation 4.25% Subordinated De...</td>
+      <td>$26.03</td>
+      <td>0.21</td>
+      <td>0.813%</td>
+      <td>NaN</td>
+      <td>United States</td>
+      <td>NaN</td>
+      <td>4904</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>8074</th>
+      <td>WRB^H</td>
+      <td>W.R. Berkley Corporation 4.125% Subordinated D...</td>
+      <td>$25.53</td>
+      <td>0.05</td>
+      <td>0.196%</td>
+      <td>NaN</td>
+      <td>United States</td>
+      <td>NaN</td>
+      <td>5614</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>8087</th>
+      <td>WSO/B</td>
+      <td>Watsco Inc.</td>
+      <td>$307.19</td>
+      <td>0.00</td>
+      <td>0.00%</td>
+      <td>NaN</td>
+      <td>United States</td>
+      <td>NaN</td>
+      <td>66</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>8135</th>
+      <td>XFLT^A</td>
+      <td>XAI Octagon Floating Rate &amp; Alternative Income...</td>
+      <td>$25.98</td>
+      <td>0.00</td>
+      <td>0.00%</td>
+      <td>NaN</td>
+      <td>United States</td>
+      <td>NaN</td>
+      <td>34</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>8181</th>
+      <td>YCBD^A</td>
+      <td>cbdMD Inc. 8.0% Series A Cumulative Convertibl...</td>
+      <td>$5.76</td>
+      <td>0.02</td>
+      <td>0.348%</td>
+      <td>NaN</td>
+      <td>United States</td>
+      <td>NaN</td>
+      <td>6812</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+  </tbody>
+</table>
+<p>8268 rows × 11 columns</p>
+</div>
+
+
+
+We have a few null values on the Market Cap column, so let's drop them, and also sort this data set by Market Cap which will prove to be useful:
+
+
+```python
+symbols_data = symbols_data[symbols_data['Market Cap'].notna()].sort_values(['Market Cap'], ascending=[False])
+len(symbols_data)
+```
+
+
+
+
+    7795
+
+
+
+Where's wealth, the data is always skewed, so plotting the cummulative sum distribution of the (sorted data by) Market Cap leads us to observe the usual "80/20" rule, where a relatively few companies make up most of the market capital at Nasdaq.
+
+
+```python
+symbols_data.reset_index()['Market Cap'].cumsum().plot(figsize=(16,9), ylabel='Cumulative Market Cap tens of $tn', xlabel='Rank of companies ordered descending by Market Cap')
+```
+
+
+
+
+    <AxesSubplot:xlabel='Rank of companies ordered descending by Market Cap', ylabel='Cumulative Market Cap tens of $tn'>
+
+
+
+
+![png](output_17_1.png)
+
+
+Incidentally, the subset of companies with a market valuation of at least $1bn make more than 98% of the total market. We'll restrict our analysis to this subset which is a list of 2844 companies:
+
+
+```python
+len(symbols_data[symbols_data['Market Cap'] >= 1000000000])
+```
+
+
+
+
+    2844
+
+
+
+
+```python
+symbols_data[symbols_data['Market Cap'] >= 1000000000]['Market Cap'].sum() / symbols_data['Market Cap'].sum() 
+```
+
+
+
+
+    0.9831569804808304
+
+
+
+
+```python
+symbols_data = symbols_data[symbols_data['Market Cap'] >= 1000000000]
+len(symbols_data)
+```
+
+
+
+
+    2844
+
+
+
+
+```python
+2844/8268
+```
+
+
+
+
+    0.3439767779390421
+
+
+
+It turns out our 80/20 rule is more a 98/34 rule where about 34% of Nasdaq companies make up more than 98% of the Nasdaq market value.
+
+## Methodology
+### Data Preprocessing
+
+### Time series prediction approached with tabular regression
+
+The basic idea of this methodology is to create features of our predicted field, ac, as previous temporal values of the same field, ac. Then we will be able to apply tabular regressors such as linear, random forest or XGBoost.
+
+So the predicted future value y would be ac(t+1).
+
+And the features X we'll use to predict y will be ac(t), ac(t-1), ... ac(t-k) - the k+1 previous values of the ac field.
+
+Let's pick a symbol, say GOOG and prepare features for the Adjusted Close ac field as the previous values of the same time series of Adjusted Close values.
+
+First, load the data and let's rename columns for easier coding:
+
+
+```python
+symbol = 'GOOG'
+symbol_data = get_symbol_data(symbol)
 symbol_data = symbol_data.rename(columns={'High':'h', 'Low':'l', 'Open':'o', 'Close':'c', 'Volume':'v', 'Adj Close':'ac'})
 ```
 
@@ -195,15 +444,11 @@ def df_to_lagged_features(df, n_in=1, n_out=0, dropnan=True):
     return agg
 ```
 
-Let's create features as shifted 'ac' column. How many lagged values should we choose is not an exact science. We mainly look at 7 predicted values in the future, so we may want to choose a multiple of this number as the number of past values to learn from, in the hope that we will catch and short term trend. Thus, we'll choose n_in=30 and n_out=7 for the moment:
+Let's create features as shifted 'ac' column. How many lagged values should we choose is not an exact science. We mainly look at 7 predicted values in the future, so we may want to choose a multiple of this number as the number of past values to learn from, in the hope that we will catch any short term trend. Thus, we'll choose n_in=30 and n_out=7 for the moment:
 
 
 ```python
 symbol_lag = df_to_lagged_features(symbol_data.loc[:, ['ac']], n_in=30, n_out=7)
-```
-
-
-```python
 symbol_lag
 ```
 
@@ -421,30 +666,6 @@ symbol_lag
       <td>...</td>
     </tr>
     <tr>
-      <th>2021-12-09</th>
-      <td>2928.550049</td>
-      <td>2922.580078</td>
-      <td>2965.409912</td>
-      <td>2875.479980</td>
-      <td>2917.260010</td>
-      <td>2935.800049</td>
-      <td>2973.659912</td>
-      <td>2984.820068</td>
-      <td>2987.030029</td>
-      <td>2984.969971</td>
-      <td>...</td>
-      <td>2960.729980</td>
-      <td>2974.409912</td>
-      <td>2962.120117</td>
-      <td>2973.500000</td>
-      <td>2934.090088</td>
-      <td>2899.409912</td>
-      <td>2947.370117</td>
-      <td>2896.770020</td>
-      <td>2856.060059</td>
-      <td>2848.030029</td>
-    </tr>
-    <tr>
       <th>2021-12-10</th>
       <td>2922.580078</td>
       <td>2965.409912</td>
@@ -540,9 +761,33 @@ symbol_lag
       <td>2942.850098</td>
       <td>2961.280029</td>
     </tr>
+    <tr>
+      <th>2021-12-16</th>
+      <td>2935.800049</td>
+      <td>2973.659912</td>
+      <td>2984.820068</td>
+      <td>2987.030029</td>
+      <td>2984.969971</td>
+      <td>2932.520020</td>
+      <td>2934.959961</td>
+      <td>2992.909912</td>
+      <td>2987.760010</td>
+      <td>2981.520020</td>
+      <td>...</td>
+      <td>2899.409912</td>
+      <td>2947.370117</td>
+      <td>2896.770020</td>
+      <td>2856.060059</td>
+      <td>2848.030029</td>
+      <td>2884.409912</td>
+      <td>2938.979980</td>
+      <td>2942.850098</td>
+      <td>2961.280029</td>
+      <td>2928.959961</td>
+    </tr>
   </tbody>
 </table>
-<p>4333 rows × 38 columns</p>
+<p>4334 rows × 38 columns</p>
 </div>
 
 
@@ -551,7 +796,7 @@ Let's now prepare y and X, the predicted values and the input for any model resp
 
 y would be the 7 values of the 'ac' column ac(t+1)..ac(t+7)
 
-X would be all other columns from ac(t-30) until ac(t)
+X would be all other columns from ac(t-30) until ac(t), so in fact we'll have 31 features to use in predicting y.
 
 
 ```python
@@ -866,9 +1111,9 @@ X.head()
 
 We are now ready to dive in and apply some tabular machine learning algorithms. So:
 
-<a id='dive_in'></a>
+### Implementation
 
-## Dive in. Easy come easy go.
+#### Small detour on a wrong path.
 
 Lets create train and test data sets then apply some tabular algos using the MultiOutputRegressor to predict the multiple values of y at the same time.
 
@@ -891,9 +1136,9 @@ mape = mean_absolute_percentage_error(y_test, y_pred)
 print(mape)
 ```
 
-    0.025737343475474312
-    CPU times: user 145 ms, sys: 9.82 ms, total: 155 ms
-    Wall time: 23.9 ms
+    0.02589295842720629
+    CPU times: user 142 ms, sys: 119 µs, total: 142 ms
+    Wall time: 26.2 ms
 
 
 Great! At 2.5% we are under the target value of 5%. Can Random Forest or XGBoost improve the outcome?
@@ -910,9 +1155,9 @@ mape = mean_absolute_percentage_error(y_test, y_pred)
 print(mape)
 ```
 
-    0.02075091074980246
-    CPU times: user 30.8 s, sys: 122 ms, total: 30.9 s
-    Wall time: 29.7 s
+    0.020769880120701485
+    CPU times: user 30 s, sys: 16 ms, total: 30.1 s
+    Wall time: 30.1 s
 
 
 
@@ -935,6 +1180,8 @@ print(mape)
 Both Random Forest and XGB improve on the linear regressor result, so it seems we have a solution - an easy one!
 
 Sadly, this is not the case. The reason for this is that beacause of the lagged features, data from the test set appears in the training set, so to some extent we use the same data for training and testing - a sure recipe for overfitting.
+
+#### Back on the right track now.
 
 Let's try again, this time selecting the test set at the end of the time series, and ensuring there is no overlap between the training set and the testing set.
 
@@ -1012,6 +1259,8 @@ The end result is that, from now onwards we will only use the linear regressor.
 
 A small note to say, that, although not presented here, we also tested the RegressorChain of the sklearn.multioutput module. It consistently produces worse results than the MultiOutputRegressor, presumably because the errors produced in the first predicted values (say ac(t+1)), which are used to predict next values (ac(t+2) etc) in the chain, amplify the errors in the predicted values down the chain. So, we are only using the MultiOutputRegressor to predict multiple values in the future.
 
+### Refinement
+
 The following function will compute the mean percentage error for a linear model for a given data set and back and forth lagged values:
 
 
@@ -1064,237 +1313,15 @@ def make_mape(df, n_in, n_out, model='linear'):
     Wall time: 4.53 µs
 
 
-<a id='one_model'></a>
-
-## One model or many models?
+#### One model or many models?
 
 Intuitively, this is easy to answer: one model for all market symbols will likely average among all stocks. It might be a good model for the average market and a few stocks that really move the market, but otherwise it would probably fair poorly on most of the stocks.
 
 Let's further enforce this (weak) justification by looking at the data of a few stocks.
 
-We'll use a list of stock symbols from the [Nasdaq website.](#nasdaq_stock_symbols) downloaded into a file called symbols.csv.
-
 Let's load the data and plot the Adjusted Close value for the last 6 years for a few stocks:
 
-
-```python
-symbols_data = pd.read_csv('symbols.csv')
-symbols_data = symbols_data.sort_values(['Market Cap'], ascending=[False])
-symbols_data
-```
-
-
-
-
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>Symbol</th>
-      <th>Name</th>
-      <th>Last Sale</th>
-      <th>Net Change</th>
-      <th>% Change</th>
-      <th>Market Cap</th>
-      <th>Country</th>
-      <th>IPO Year</th>
-      <th>Volume</th>
-      <th>Sector</th>
-      <th>Industry</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>18</th>
-      <td>AAPL</td>
-      <td>Apple Inc. Common Stock</td>
-      <td>$172.26</td>
-      <td>-7.04</td>
-      <td>-3.926%</td>
-      <td>2.986530e+12</td>
-      <td>United States</td>
-      <td>1980.0</td>
-      <td>149956379</td>
-      <td>Technology</td>
-      <td>Computer Manufacturing</td>
-    </tr>
-    <tr>
-      <th>5006</th>
-      <td>MSFT</td>
-      <td>Microsoft Corporation Common Stock</td>
-      <td>$324.90</td>
-      <td>-9.75</td>
-      <td>-2.913%</td>
-      <td>2.439343e+12</td>
-      <td>United States</td>
-      <td>1986.0</td>
-      <td>34986695</td>
-      <td>Technology</td>
-      <td>Computer Software: Prepackaged Software</td>
-    </tr>
-    <tr>
-      <th>3354</th>
-      <td>GOOG</td>
-      <td>Alphabet Inc. Class C Capital Stock</td>
-      <td>$2896.77</td>
-      <td>-50.60</td>
-      <td>-1.717%</td>
-      <td>1.922772e+12</td>
-      <td>United States</td>
-      <td>2004.0</td>
-      <td>1368942</td>
-      <td>Technology</td>
-      <td>Internet and Information Services</td>
-    </tr>
-    <tr>
-      <th>3355</th>
-      <td>GOOGL</td>
-      <td>Alphabet Inc. Class A Common Stock</td>
-      <td>$2888.90</td>
-      <td>-39.92</td>
-      <td>-1.363%</td>
-      <td>1.917548e+12</td>
-      <td>United States</td>
-      <td>NaN</td>
-      <td>1681623</td>
-      <td>Technology</td>
-      <td>Internet and Information Services</td>
-    </tr>
-    <tr>
-      <th>452</th>
-      <td>AMZN</td>
-      <td>Amazon.com Inc. Common Stock</td>
-      <td>$3377.42</td>
-      <td>-88.88</td>
-      <td>-2.564%</td>
-      <td>1.712851e+12</td>
-      <td>United States</td>
-      <td>1997.0</td>
-      <td>3038172</td>
-      <td>Consumer Services</td>
-      <td>Catalog/Specialty Distribution</td>
-    </tr>
-    <tr>
-      <th>...</th>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-    </tr>
-    <tr>
-      <th>8073</th>
-      <td>WRB^G</td>
-      <td>W.R. Berkley Corporation 4.25% Subordinated De...</td>
-      <td>$26.03</td>
-      <td>0.21</td>
-      <td>0.813%</td>
-      <td>NaN</td>
-      <td>United States</td>
-      <td>NaN</td>
-      <td>4904</td>
-      <td>NaN</td>
-      <td>NaN</td>
-    </tr>
-    <tr>
-      <th>8074</th>
-      <td>WRB^H</td>
-      <td>W.R. Berkley Corporation 4.125% Subordinated D...</td>
-      <td>$25.53</td>
-      <td>0.05</td>
-      <td>0.196%</td>
-      <td>NaN</td>
-      <td>United States</td>
-      <td>NaN</td>
-      <td>5614</td>
-      <td>NaN</td>
-      <td>NaN</td>
-    </tr>
-    <tr>
-      <th>8087</th>
-      <td>WSO/B</td>
-      <td>Watsco Inc.</td>
-      <td>$307.19</td>
-      <td>0.00</td>
-      <td>0.00%</td>
-      <td>NaN</td>
-      <td>United States</td>
-      <td>NaN</td>
-      <td>66</td>
-      <td>NaN</td>
-      <td>NaN</td>
-    </tr>
-    <tr>
-      <th>8135</th>
-      <td>XFLT^A</td>
-      <td>XAI Octagon Floating Rate &amp; Alternative Income...</td>
-      <td>$25.98</td>
-      <td>0.00</td>
-      <td>0.00%</td>
-      <td>NaN</td>
-      <td>United States</td>
-      <td>NaN</td>
-      <td>34</td>
-      <td>NaN</td>
-      <td>NaN</td>
-    </tr>
-    <tr>
-      <th>8181</th>
-      <td>YCBD^A</td>
-      <td>cbdMD Inc. 8.0% Series A Cumulative Convertibl...</td>
-      <td>$5.76</td>
-      <td>0.02</td>
-      <td>0.348%</td>
-      <td>NaN</td>
-      <td>United States</td>
-      <td>NaN</td>
-      <td>6812</td>
-      <td>NaN</td>
-      <td>NaN</td>
-    </tr>
-  </tbody>
-</table>
-<p>8268 rows × 11 columns</p>
-</div>
-
-
-
-We have a few null values on the Market Cap column, so let's drop them.
-
-
-```python
-symbols_data = symbols_data[symbols_data['Market Cap'].notna()].sort_values(['Market Cap'], ascending=[False])
-len(symbols_data)
-```
-
-
-
-
-    7795
-
-
-
-Lets select the first, the 10th, the 100th and 1000th stock symbols by market capitalisation:
+We'll pick the first, the 10th, the 100th and 1000th stock symbols by market capitalisation:
 
 
 ```python
@@ -1461,64 +1488,7 @@ Looking at the above plot, it is reasonable to suspect a linear model will perfo
 
 This is a weak, informal justification for this decision, but we'll generate one model per stock. The training time is well under a second per stock so, we'll be able to generate the respective model(s) in a reasonable time.
 
-Let's also observe that the subset of companies with a market valuation of at least $1bn make more than 98% of the total market. We'll restrict our analysis to this subset which is a list of 2844 companies:
-
-
-```python
-len(symbols_data[symbols_data['Market Cap'] >= 1000000000])
-```
-
-
-
-
-    2844
-
-
-
-
-```python
-symbols_data.reset_index()['Market Cap'].cumsum().plot(figsize=(16,9), ylabel='Cumulative Market Cap tens of $tn', xlabel='Rank of companies ordered descending by Market Cap')
-```
-
-
-
-
-    <AxesSubplot:xlabel='Rank of companies ordered descending by Market Cap', ylabel='Cumulative Market Cap tens of $tn'>
-
-
-
-
-![png](output_56_1.png)
-
-
-
-```python
-symbols_data[symbols_data['Market Cap'] >= 1000000000]['Market Cap'].sum() / symbols_data['Market Cap'].sum() 
-```
-
-
-
-
-    0.9831569804808304
-
-
-
-
-```python
-symbols_data = symbols_data[symbols_data['Market Cap'] >= 1000000000]
-len(symbols_data)
-```
-
-
-
-
-    2844
-
-
-
-<a id='how_much_lagged'></a>
-
-## How much lagged data do we need?
+#### How much lagged data do we need?
 
 Let's look at a couple of companies, GOOG, TSLA and see if we can generalise what we'll learn. At a glance it is hard to say whether one stock or the other will fare better with our linear regressor:
 
@@ -1544,10 +1514,10 @@ ticks.plot(figsize=(16,9))
 
 
 
-![png](output_61_1.png)
+![png](output_56_1.png)
 
 
-Next, we set the predicted values n_out to 7, while we fit linear regressors for different training values where the training sets have back values as features ranging from 1 to 60. We then plot the mean percentage errors (y axis) versus the number of lagged features in the model (X axis) for both TSLA and GOOG:
+Next, we set the predicted values n_out to 7, while we fit linear regressors for different training sets where the training sets have back values as features ranging from 1 to 60. We then plot the mean percentage errors (y axis) versus the number of lagged features in the model (X axis) for both TSLA and GOOG:
 
 
 ```python
@@ -1580,10 +1550,10 @@ df1.plot(figsize=(16,9), xlabel='Number of lagged features', ylabel='MAPE for a 
 
 
 
-![png](output_63_2.png)
+![png](output_58_2.png)
 
 
-Looking at the graph above there seems to be no benefit of retaining more than 20 lagged values for our linear regressor. Plotting GOOG and TSLA separately make it more clear.
+Looking at the graph above there seems to be no benefit of retaining more than 20 lagged values for our linear regressor. Plotting GOOG and TSLA separately makes it more clear.
 
 
 ```python
@@ -1611,7 +1581,7 @@ pd.DataFrame(mape_list).rename(columns={0:'GOOG'}).plot(figsize=(16,9), xlabel='
 
 
 
-![png](output_65_2.png)
+![png](output_60_2.png)
 
 
 
@@ -1640,7 +1610,7 @@ pd.DataFrame(mape_list).rename(columns={0:'TSLA'}).plot(figsize=(16,9), xlabel='
 
 
 
-![png](output_66_2.png)
+![png](output_61_2.png)
 
 
 So we think of retaining no more than 20 lagged features for our linear regressor. Let's see if this assuption holds for 10 random stocks from our symbols_data.
@@ -1697,14 +1667,15 @@ df1.plot(figsize=(16,9), xlabel='Number of lagged features', ylabel='MAPE for a 
 
 
 
-![png](output_70_1.png)
+![png](output_65_1.png)
 
 
 The above plot still sustains our 20 lagged features approach. But, let's do further tests in support for this decision:
 
-<a id='how_much_data'></a>
+## Results
+### Model Evaluation and Validation
 
-## How much train data do we need?
+#### How much train data do we need?
 
 Here, again, we try to compromise between two facts of intuition:
 
@@ -1714,7 +1685,7 @@ On the other hand, irregular noisy time series will extract little information f
 
 So far we used all the data history from yahoo which of course has different lenghts for different stocks.
 
-Let's see how the mean absolute percentage error (mape) changes when picking random periods of 1 to 10 years in length respectively from the history of a stock. We repeat this random selection 30 times.
+To further evaluate and validate our linear model, let's see how the mean absolute percentage error (mape) changes when picking random periods of 1 to 10 years in length respectively from the history of a stock. We repeat this random selection 30 times.
 
 We'll repeat the above process 10 times for GOOG which looks to be a more stable stock, and compare it with TSLA which appears to have more variability.
 
@@ -1791,7 +1762,7 @@ for year in range(1,11):
 
 For TSLA more history data tends to amplify the prediction error, sustaining the idea of TSLA containing more randomness than GOOG, thus being harder to predict.
 
-Let's see if we look at a sample of 10 arbitrary stocks:
+Let's repeat the above randomised model evaluation by selecting a sample of 10 arbitrary stocks:
 
 
 ```python
@@ -1849,7 +1820,7 @@ for symbol in symbols:
     Wall time: 29.4 s
 
 
-And the average error per year for the combine 10 stocks above:
+The average error per year for the combine 10 stocks above:
 
 
 ```python
@@ -1860,15 +1831,17 @@ for y in range(1, 11):
 
     ymean 0.043  0.035  0.032  0.031  0.034  0.035  0.034  0.036  0.027  0.026  
 
-The data above provides anecdotic evidence that a group of stocks may start capturing market trend data. In this context, more data tend to fair better. In our sample above, using data from the last 10 years produced the lowest absolute percentage error at 2.6%.
+The data above provides further evidence that a group of stocks may start capturing market trend data. In this context, more data tend to fare better. In our sample above, using data from the last 10 years produced the lowest absolute percentage error at 2.6%.
 
-<a id='test_all'></a>
+### Final Justification
 
-## Test (almost) all the data
+#### Test (almost) all the data
 
-For this section we downloaded all available data from Yahoo Finance for all the stocks having a market valuation of $1bn or more. This takes a considerable amont of time, close to 3 hours, so it is difficult to replicate, but we feel it is worth presenting the results nevertheless.
+"Almost" refers to the fact that we only use data for the 34% of Nasdaq companies that make up more than 98% of the total Nasdaq market value.
 
-The code to download the respective data is (uncomment and run it replicate the results below):
+For this section we downloaded all available data from Yahoo Finance for all the stocks having a market valuation of $1bn or more. This takes a considerable amont of time, close to 3 hours, so it is difficult to replicate, but we feel it is worth presenting the results nevertheless, to bring a final justification to our model selection.
+
+The code to download the respective data is (uncomment it and run it replicate the results below):
 
 
 ```python
@@ -1934,7 +1907,11 @@ Working with the whole market data shows a clear trend: the longer the better. T
 
 There is a significant error decrease jumping from 1 to 2 years worth of data. After that there is progressive improvement but smaller and smaller as the history increases.
 
-One last test is presented below: for each stock and using the most recent data, we train and predict 7 values in "future" using 1, 2, and up to 10 years of historic data. We than average the results per year and display the results.
+### Final Final Justification
+
+#### Test (almost) all the data - again, but in a different way
+
+One last test is presented below: for each stock and using the most recent data, we train and predict 7 values in "future" (really the last 7 ac values in our data sets) using 1, 2, and up to 10 years of the most recent historic data. We than average the results per year and display the results.
 
 
 ```python
@@ -1984,13 +1961,11 @@ for y in range(1, 11):
 
     ymean 0.054  0.049  0.049  0.048  0.048  0.048  0.048  0.048  0.048  0.048  
 
-Again, working with most of the market data shows a good improvement after the first year, and practically reaching a flat plateau immediately after, but still showing a trend of improvement with more history used for training. 
+Again, working with most of the market data shows a good improvement after the first year, and practically reaching a flat plateau immediately after, but still showing a trend of slight improvement with more history used for training. 
 
-Arguably, it is not worth training on a data set longer than a year and maybe no longer than 3 or 4 years. This is consistent with our previous randomised test above. 
+Arguably, it is not worth training on a data set longer than two years and definitely no longer than 3 or 4 years. This is also in good accordance with our previous randomised test above (the section Final Justification). 
 
-What is really surprising is that the long term average 7 days prediction absolute percentage error is exactly just under 5% - coinciding with the objective of this homework. Is this maybe a systemic property of the stock market when aproached with simple analisys tools?
-
-<a id='conclusion'></a>
+What is really surprising is that the average 7 days prediction absolute percentage error is exactly just under 5% - coinciding with the objective of this homework. Could this maybe be a systemic property of the stock market when aproached with simple analisys tools?
 
 ## Conclusion
 
@@ -2002,38 +1977,61 @@ This work also hints that significantly improving the 5% error margin, to say, b
 
 Where's money there is skewness and we saw this as well here, by noticing that about a third of the listed Nasdaq stocks make practically the whole marked with over 98% of the total Nasdaq market value.
 
-<a id='external_links'></a>
+## Reflection
 
-## External links
+I worked for a significant number of years in the finance industry and I was quite intrigued by this theme as a Capstone Project. I knew stock prices are hard to predict and I was asking myself: "is 5% on average for the next 7 trading days" a hard task? Or even achievable with desktop tools?
+
+It turns out it is achievable.
+
+I did quite a number of experiments while developing this post. I saw for example, that, except for TSLA and NVDA the top 10 symbols by Market Cap fare pretty well with the linear model, staying under 5% MAPE for well over 7 steps in advance (at least 20). I run the [Augmented Dickey–Fuller test](https://en.wikipedia.org/wiki/Augmented_Dickey%E2%80%93Fuller_test) on different symbols trying to figure out why some are more linearly predictable than others - and could not extract any useful information. 
+
+In running various tests on different symbols with lag steps ahead and behind, I was thinking that this is perhaps exactly what a decision tree algorithm would do if the data would be engineered in the right way. In doing these tests I also tried to figure out what is the statistical significance of these tests and step by step I realised that testing (almost) the whole market is within reach and would provide a solid justification for a selected model.
+
+## Refinement
+
+There are a number of ways to explore improvements with the approach above.
+
+One way is to explore other features. The Volume field looks worth exploring since it seems to have little correlation with Adjusted Close thus possibly embedding additional information. Adding lagged values for Volume would be interesting to explore.
+
+Another area is to compute metrics used in the established time series analysis field, and use them as new features.
+
+Yet another set of features may be derived from the type of (a trading) day - maybe trading is done different at the end of financial quartes or in the proximity of holidays. The fastai library has such functionality which is presented [here](https://github.com/fastai/fastbook/blob/master/09_tabular.ipynb)
+
+Last but not least, it would be interesting to find out how this approach fares when compared to a classic time series analysis aproach using libraries like [TSA](https://www.statsmodels.org/stable/tsa.html) or [Prophet](https://facebook.github.io/prophet/docs/quick_start.html).
+
+
+## References
 
 <a id='itcp'></a>
 
-Udacity MLND Capstone Project Description - Investment and Trading https://docs.google.com/document/d/1ycGeb1QYKATG6jvz74SAMqxrlek9Ed4RYrzWNhWS-0Q/pub
+[Udacity MLND Capstone Project Description - Investment and Trading](https://docs.google.com/document/d/1ycGeb1QYKATG6jvz74SAMqxrlek9Ed4RYrzWNhWS-0Q/pub)
 
 <a id='random_walks'></a>
 
-Wikipedia Random Walks for stock prices https://en.wikipedia.org/wiki/Random_walk_hypothesishttps://en.wikipedia.org/wiki/Random_walk_hypothesis
+[Wikipedia Random Walks for stock prices](https://en.wikipedia.org/wiki/Random_walk_hypothesishttps://en.wikipedia.org/wiki/Random_walk_hypothesis)
 
 <a id='brownian_motion'></a>
 
-Wikipedia Geometric Brownian motion https://en.wikipedia.org/wiki/Geometric_Brownian_motion
+[Wikipedia Geometric Brownian motion](https://en.wikipedia.org/wiki/Geometric_Brownian_motion)
 
 <a id='asr_1'></a>
 
-What Is the Average Stock Market Return? https://www.nerdwallet.com/article/investing/average-stock-market-return
+[What Is the Average Stock Market Return?](https://www.nerdwallet.com/article/investing/average-stock-market-return)
 
 <a id='asr_2'></a>
 
-Average Stock Market Return https://www.fool.com/investing/how-to-invest/stocks/average-stock-market-return/
+[Average Stock Market Return](https://www.fool.com/investing/how-to-invest/stocks/average-stock-market-return/)
 
 <a id='yfinance'></a>
 
-Download historical data in Yahoo Finance https://help.yahoo.com/kb/SLN2311.htmlAverage 
+[Download historical data in Yahoo Finance](https://help.yahoo.com/kb/SLN2311.htmlAverage)
 
 <a id='ts_as_supervised_learning'></a>
 
-How to Convert a Time Series to a Supervised Learning Problem in Python https://machinelearningmastery.com/convert-time-series-supervised-learning-problem-python/
+[How to Convert a Time Series to a Supervised Learning Problem in Python](https://machinelearningmastery.com/convert-time-series-supervised-learning-problem-python/)
 
 <a id='nasdaq_stock_symbols'></a>
 
-Nasdaq stock symbols https://www.nasdaq.com/market-activity/stocks/screener
+[Nasdaq stock symbols](https://www.nasdaq.com/market-activity/stocks/screener)
+
+[The notebook used to write this post](https://github.com/cmageanu/predict_stock_prices/blob/master/predict_stock_prices.ipynb)
